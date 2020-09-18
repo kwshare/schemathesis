@@ -1,12 +1,14 @@
 from functools import partial
 from typing import Any, Callable, Generator, List, Optional, Type, cast
 
+import hypothesis
 import pytest
 from _pytest import fixtures, nodes
 from _pytest.config import hookimpl
 from _pytest.fixtures import FuncFixtureInfo
 from _pytest.nodes import Node
 from _pytest.python import Class, Function, FunctionDefinition, Metafunc, Module, PyCollector
+from _pytest.runner import runtestprotocol
 from hypothesis.errors import InvalidArgument  # pylint: disable=ungrouped-imports
 from packaging import version
 
@@ -53,7 +55,15 @@ class SchemathesisCase(PyCollector):
         metafunc = self._parametrize(cls, definition, fixtureinfo)
 
         if not metafunc._calls:
-            yield create(SchemathesisFunction, name=name, parent=self.parent, callobj=funcobj, fixtureinfo=fixtureinfo)
+            yield create(
+                SchemathesisFunction,
+                name=name,
+                parent=self.parent,
+                callobj=funcobj,
+                fixtureinfo=fixtureinfo,
+                test_func=self.test_function,
+                originalname=self.name,
+            )
         else:
             fixtures.add_funcarg_pseudo_fixture_def(self.parent, metafunc, fixturemanager)
             fixtureinfo.prune_dependency_tree()
@@ -68,6 +78,7 @@ class SchemathesisCase(PyCollector):
                     fixtureinfo=fixtureinfo,
                     keywords={callspec.id: True},
                     originalname=name,
+                    test_func=self.test_function,
                 )
 
     def _get_class_parent(self) -> Optional[Type]:
@@ -106,12 +117,39 @@ class SchemathesisCase(PyCollector):
 
 
 class SchemathesisFunction(Function):  # pylint: disable=too-many-ancestors
+    def __init__(self, *args: Any, test_func: Callable, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.test_function = test_func
+
     def _getobj(self) -> partial:
         """Tests defined as methods require `self` as the first argument.
 
         This method is called only for this case.
         """
         return partial(self.obj, self.parent.obj)
+
+    def _get_stateful_tests(self) -> List["SchemathesisFunction"]:
+        feedback = getattr(self.obj, "_schemathesis_feedback", None)
+        if feedback is None:
+            return []
+        return [
+            create(
+                self.__class__,
+                name=f"{self.originalname}[{endpoint.method}:{endpoint.full_path}]",
+                parent=self.parent,
+                callspec=getattr(self, "callspec", None),
+                callobj=test,
+                fixtureinfo=self._fixtureinfo,
+                keywords=self.keywords,
+                originalname=self.originalname,
+                test_func=self.test_function,
+            )
+            for (endpoint, test) in feedback.get_stateful_tests(self.test_function, hypothesis.settings(), 1)
+        ]
+
+    def add_stateful_tests(self) -> None:
+        idx = self.session.items.index(self) + 1
+        self.session.items[idx:idx] = self._get_stateful_tests()
 
 
 @hookimpl(hookwrapper=True)  # type:ignore # pragma: no mutate
@@ -135,3 +173,12 @@ def pytest_pyfunc_call(pyfuncitem):  # type:ignore
         outcome.get_result()
     except InvalidArgument as exc:
         pytest.fail(exc.args[0])
+
+
+def pytest_runtest_protocol(item: Function, nextitem: Optional[Function]) -> bool:
+    item.ihook.pytest_runtest_logstart(nodeid=item.nodeid, location=item.location)
+    runtestprotocol(item, nextitem=nextitem)
+    item.ihook.pytest_runtest_logfinish(nodeid=item.nodeid, location=item.location)
+    if isinstance(item, SchemathesisFunction):
+        item.add_stateful_tests()
+    return True

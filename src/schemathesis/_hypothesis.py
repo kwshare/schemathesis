@@ -15,6 +15,7 @@ from .exceptions import InvalidSchema
 from .hooks import GLOBAL_HOOK_DISPATCHER, HookContext, HookDispatcher
 from .models import Case, Endpoint
 from .specs.openapi._hypothesis import STRING_FORMATS
+from .stateful import Feedback
 
 PARAMETERS = frozenset(("path_parameters", "headers", "cookies", "query", "body", "form_data"))
 LOCATION_TO_CONTAINER = {
@@ -33,7 +34,8 @@ def create_test(
 ) -> Callable:
     """Create a Hypothesis test."""
     hook_dispatcher = getattr(test, "_schemathesis_hooks", None)
-    strategy = endpoint.as_strategy(hooks=hook_dispatcher)
+    feedback = Feedback("links", endpoint)
+    strategy = get_case_strategy(endpoint, hook_dispatcher, feedback=feedback)
     wrapped_test = hypothesis.given(case=strategy)(test)
     if seed is not None:
         wrapped_test = hypothesis.seed(seed)(wrapped_test)
@@ -41,7 +43,11 @@ def create_test(
         wrapped_test.hypothesis.inner_test = make_async_test(test)  # type: ignore
     setup_default_deadline(wrapped_test)
     if settings is not None:
-        wrapped_test = settings(wrapped_test)
+        try:
+            wrapped_test = settings(wrapped_test)
+        except:  # TODO. fix re-wrapping
+            pass
+    wrapped_test._schemathesis_feedback = feedback
     return add_examples(wrapped_test, endpoint, hook_dispatcher=hook_dispatcher)
 
 
@@ -132,13 +138,15 @@ def is_valid_query(query: Dict[str, Any]) -> bool:
     return True
 
 
-def get_case_strategy(endpoint: Endpoint, hooks: Optional[HookDispatcher] = None) -> st.SearchStrategy:
+def get_case_strategy(
+    endpoint: Endpoint, hooks: Optional[HookDispatcher] = None, feedback: Optional["Feedback"] = None
+) -> st.SearchStrategy:
     """Create a strategy for a complete test case.
 
     Path & endpoint are static, the others are JSON schemas.
     """
     strategies = {}
-    static_kwargs: Dict[str, Any] = {}
+    static_kwargs: Dict[str, Any] = {"feedback": feedback}
     for parameter in PARAMETERS:
         value = getattr(endpoint, parameter)
         if value is not None:

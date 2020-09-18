@@ -24,7 +24,7 @@ from .utils import GenericResponse, WSGIResponse
 if TYPE_CHECKING:
     from .hooks import HookDispatcher
     from .schemas import BaseSchema
-    from .stateful import StatefulTest
+    from .stateful import Feedback, StatefulTest
 
 
 @attr.s(slots=True)  # pragma: no mutate
@@ -38,6 +38,8 @@ class Case:
     query: Optional[Query] = attr.ib(default=None)  # pragma: no mutate
     body: Optional[Body] = attr.ib(default=None)  # pragma: no mutate
     form_data: Optional[FormData] = attr.ib(default=None)  # pragma: no mutate
+
+    feedback: "Feedback" = attr.ib(repr=False, default=None)
 
     @property
     def path(self) -> str:
@@ -156,7 +158,12 @@ class Case:
         response = session.request(**data)  # type: ignore
         if close_session:
             session.close()
+        if self.feedback:
+            self.store_response(response)
         return response
+
+    def store_response(self, response: GenericResponse) -> None:
+        self.feedback.add_test_case(self, response)
 
     def as_werkzeug_kwargs(self, headers: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         """Convert the case into a dictionary acceptable by werkzeug.Client."""
@@ -191,7 +198,10 @@ class Case:
         data = self.as_werkzeug_kwargs(headers)
         client = werkzeug.Client(application, WSGIResponse)
         with cookie_handler(client, self.cookies):
-            return client.open(**data, **kwargs)
+            response = client.open(**data, **kwargs)
+        if self.feedback:
+            self.store_response(response)
+        return response
 
     def call_asgi(
         self,
@@ -323,7 +333,7 @@ class Endpoint:
     def as_strategy(self, hooks: Optional["HookDispatcher"] = None) -> SearchStrategy:
         from ._hypothesis import get_case_strategy  # pylint: disable=import-outside-toplevel
 
-        return get_case_strategy(self, hooks)
+        return get_case_strategy(self, hooks, None)
 
     def get_strategies_from_examples(self) -> List[SearchStrategy[Case]]:
         """Get examples from endpoint."""

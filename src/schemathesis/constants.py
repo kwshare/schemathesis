@@ -1,3 +1,5 @@
+import enum
+
 from ._compat import metadata
 
 try:
@@ -9,3 +11,7 @@ except metadata.PackageNotFoundError:
 
 USER_AGENT = f"schemathesis/{__version__}"
 DEFAULT_DEADLINE = 500  # pragma: no mutate
+
+
+class Stateful(enum.Enum):
+    links = 1

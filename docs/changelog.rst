@@ -6,6 +6,11 @@ Changelog
 `Unreleased`_
 -------------
 
+Added
+~~~~~
+
+- Stateful testing for the ``pytest`` runner. `#616`_
+
 `2.4.1`_ - 2020-09-17
 ---------------------
 
@@ -1376,6 +1381,7 @@ Fixed
 .. _#621: https://github.com/schemathesis/schemathesis/issues/621
 .. _#618: https://github.com/schemathesis/schemathesis/issues/618
 .. _#617: https://github.com/schemathesis/schemathesis/issues/617
+.. _#616: https://github.com/schemathesis/schemathesis/issues/616
 .. _#614: https://github.com/schemathesis/schemathesis/issues/614
 .. _#612: https://github.com/schemathesis/schemathesis/issues/612
 .. _#600: https://github.com/schemathesis/schemathesis/issues/600

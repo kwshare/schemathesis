@@ -17,6 +17,7 @@ from hypothesis.strategies import SearchStrategy
 from requests.structures import CaseInsensitiveDict
 
 from ._hypothesis import make_test_or_exception
+from .constants import Stateful
 from .exceptions import InvalidSchema
 from .hooks import HookContext, HookDispatcher, HookScope, dispatch
 from .models import Case, Endpoint
@@ -38,6 +39,7 @@ class BaseSchema(Mapping):
     hooks: HookDispatcher = attr.ib(factory=lambda: HookDispatcher(scope=HookScope.SCHEMA))  # pragma: no mutate
     test_function: Optional[GenericTest] = attr.ib(default=None)  # pragma: no mutate
     validate_schema: bool = attr.ib(default=True)  # pragma: no mutate
+    stateful: Optional[Stateful] = attr.ib(default=None)  # pragma: no mutate
 
     def __iter__(self) -> Iterator[str]:
         return iter(self.endpoints)
@@ -123,6 +125,7 @@ class BaseSchema(Mapping):
         tag: Optional[Filter] = NOT_SET,
         operation_id: Optional[Filter] = NOT_SET,
         validate_schema: Union[bool, NotSet] = NOT_SET,
+        stateful: Optional[Union[Stateful, NotSet]] = NOT_SET,
     ) -> Callable:
         """Mark a test function as a parametrized one."""
 
@@ -135,6 +138,7 @@ class BaseSchema(Mapping):
                 tag=tag,
                 operation_id=operation_id,
                 validate_schema=validate_schema,
+                stateful=stateful,
             )
             return func
 
@@ -150,6 +154,7 @@ class BaseSchema(Mapping):
         operation_id: Optional[Filter] = NOT_SET,
         hooks: Union[HookDispatcher, NotSet] = NOT_SET,
         validate_schema: Union[bool, NotSet] = NOT_SET,
+        stateful: Optional[Union[Stateful, NotSet]] = NOT_SET,
     ) -> "BaseSchema":
         if method is NOT_SET:
             method = self.method
@@ -163,6 +168,8 @@ class BaseSchema(Mapping):
             validate_schema = self.validate_schema
         if hooks is NOT_SET:
             hooks = self.hooks
+        if stateful is NOT_SET:
+            stateful = self.stateful
 
         return self.__class__(
             self.raw_schema,
@@ -176,6 +183,7 @@ class BaseSchema(Mapping):
             hooks=hooks,  # type: ignore
             test_function=test_function,
             validate_schema=validate_schema,  # type: ignore
+            stateful=stateful,  # type: ignore
         )
 
     def get_local_hook_dispatcher(self) -> Optional[HookDispatcher]:

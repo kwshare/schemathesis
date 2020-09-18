@@ -9,11 +9,12 @@ import hypothesis
 
 from ..._hypothesis import make_test_or_exception
 from ...models import CheckFunction, TestResultSet
+from ...stateful import Feedback
 from ...targets import Target
 from ...types import RawAuth
 from ...utils import capture_hypothesis_output, get_requests_auth
 from .. import events
-from .core import BaseRunner, Feedback, asgi_test, get_session, network_test, run_test, wsgi_test
+from .core import BaseRunner, asgi_test, get_session, network_test, run_test, wsgi_test
 
 
 def _run_task(
