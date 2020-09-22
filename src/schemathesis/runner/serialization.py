@@ -8,7 +8,8 @@ from typing import Any, Dict, List, Optional
 
 import attr
 
-from ..models import Case, Check, Interaction, Status, TestResult
+from ..models import Check, Interaction, Status, TestResult
+from ..protocols import CaseProtocol
 from ..types import Body, Cookies, FormData, Headers, PathParameters, Query
 from ..utils import format_exception
 
@@ -24,7 +25,7 @@ class SerializedCase:
     form_data: Optional[FormData] = attr.ib(default=None)  # pragma: no mutate
 
     @classmethod
-    def from_case(cls, case: Case, headers: Optional[Dict[str, Any]]) -> "SerializedCase":
+    def from_case(cls, case: CaseProtocol, headers: Optional[Dict[str, Any]]) -> "SerializedCase":
         return cls(
             path_parameters=case.path_parameters,
             headers=case.headers,
@@ -61,7 +62,7 @@ class SerializedError:
 
     @classmethod
     def from_error(
-        cls, exception: Exception, case: Optional[Case], headers: Optional[Dict[str, Any]]
+        cls, exception: Exception, case: Optional[CaseProtocol], headers: Optional[Dict[str, Any]]
     ) -> "SerializedError":
         return cls(
             exception=format_exception(exception),

@@ -11,7 +11,8 @@ from requests.auth import _basic_auth_str
 from ... import utils
 from ...exceptions import InvalidSchema
 from ...hooks import GLOBAL_HOOK_DISPATCHER, HookContext, HookDispatcher
-from ...models import Case, Endpoint
+from ...models import Case
+from ...protocols import CaseProtocol, EndpointProtocol
 
 PARAMETERS = frozenset(("path_parameters", "headers", "cookies", "query", "body", "form_data"))
 SLASH = "/"
@@ -69,7 +70,7 @@ def is_valid_query(query: Dict[str, Any]) -> bool:
     return True
 
 
-def get_case_strategy(endpoint: Endpoint, hooks: Optional[HookDispatcher] = None) -> st.SearchStrategy:
+def get_case_strategy(endpoint: EndpointProtocol, hooks: Optional[HookDispatcher] = None) -> st.SearchStrategy:
     """Create a strategy for a complete test case.
 
     Path & endpoint are static, the others are JSON schemas.
@@ -144,11 +145,11 @@ def quote_all(parameters: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _get_case_strategy(
-    endpoint: Endpoint,
+    endpoint: EndpointProtocol,
     extra_static_parameters: Dict[str, Any],
     strategies: Dict[str, st.SearchStrategy],
     hook_dispatcher: Optional[HookDispatcher] = None,
-) -> st.SearchStrategy[Case]:
+) -> st.SearchStrategy[CaseProtocol]:
     static_parameters: Dict[str, Any] = {"endpoint": endpoint, **extra_static_parameters}
     if endpoint.schema.validate_schema and endpoint.method == "GET":
         if endpoint.body is not None:

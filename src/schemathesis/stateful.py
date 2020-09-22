@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 import attr
 
-from .models import Case, Endpoint
+from .protocols import CaseProtocol, EndpointProtocol
 from .utils import NOT_SET, GenericResponse
 
 
@@ -36,8 +36,8 @@ class StatefulTest:
 
     name: str = attr.ib()  # pragma: no mutate
 
-    def parse(self, case: Case, response: GenericResponse) -> ParsedData:
+    def parse(self, case: CaseProtocol, response: GenericResponse) -> ParsedData:
         raise NotImplementedError
 
-    def make_endpoint(self, data: List[ParsedData]) -> Endpoint:
+    def make_endpoint(self, data: List[ParsedData]) -> EndpointProtocol:
         raise NotImplementedError

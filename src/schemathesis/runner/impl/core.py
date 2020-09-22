@@ -13,7 +13,8 @@ from ..._hypothesis import make_test_or_exception
 from ...constants import DEFAULT_DEADLINE, USER_AGENT
 from ...exceptions import CheckFailed, InvalidSchema, get_grouped_exception
 from ...hooks import HookContext, get_all_by_name
-from ...models import Case, CheckFunction, Endpoint, Status, TestResult, TestResultSet
+from ...models import CheckFunction, Status, TestResult, TestResultSet
+from ...protocols import CaseProtocol, EndpointProtocol
 from ...runner import events
 from ...schemas import BaseSchema
 from ...stateful import ParsedData, StatefulTest
@@ -37,10 +38,10 @@ class StatefulData:
     stateful_test: StatefulTest = attr.ib()  # pragma: no mutate
     container: List[ParsedData] = attr.ib(factory=list)  # pragma: no mutate
 
-    def make_endpoint(self) -> Endpoint:
+    def make_endpoint(self) -> EndpointProtocol:
         return self.stateful_test.make_endpoint(self.container)
 
-    def store(self, case: Case, response: GenericResponse) -> None:
+    def store(self, case: CaseProtocol, response: GenericResponse) -> None:
         """Parse and store data for a stateful test."""
         parsed = self.stateful_test.parse(case, response)
         self.container.append(parsed)
@@ -54,10 +55,10 @@ class Feedback:
     """
 
     stateful: Optional[str] = attr.ib()  # pragma: no mutate
-    endpoint: Endpoint = attr.ib()  # pragma: no mutate
+    endpoint: EndpointProtocol = attr.ib()  # pragma: no mutate
     stateful_tests: Dict[str, StatefulData] = attr.ib(factory=dict)  # pragma: no mutate
 
-    def add_test_case(self, case: Case, response: GenericResponse) -> None:
+    def add_test_case(self, case: CaseProtocol, response: GenericResponse) -> None:
         """Store test data to reuse it in the future additional tests."""
         for stateful_test in case.endpoint.get_stateful_tests(response, self.stateful):
             data = self.stateful_tests.setdefault(stateful_test.name, StatefulData(stateful_test))
@@ -65,7 +66,7 @@ class Feedback:
 
     def get_stateful_tests(
         self, test: Callable, settings: hypothesis.settings, seed: Optional[int]
-    ) -> Generator[Tuple[Endpoint, Union[Callable, InvalidSchema]], None, None]:
+    ) -> Generator[Tuple[EndpointProtocol, Union[Callable, InvalidSchema]], None, None]:
         """Generate additional tests that use data from the previous ones."""
         for data in self.stateful_tests.values():
             endpoint = data.make_endpoint()
@@ -135,7 +136,7 @@ class BaseRunner:
 
 
 def run_test(  # pylint: disable=too-many-locals
-    endpoint: Endpoint,
+    endpoint: EndpointProtocol,
     test: Union[Callable, InvalidSchema],
     checks: Iterable[CheckFunction],
     targets: Iterable[Target],
@@ -216,7 +217,9 @@ def reraise(error: AssertionError) -> InvalidSchema:
         return exc
 
 
-def run_checks(case: Case, checks: Iterable[CheckFunction], result: TestResult, response: GenericResponse) -> None:
+def run_checks(
+    case: CaseProtocol, checks: Iterable[CheckFunction], result: TestResult, response: GenericResponse
+) -> None:
     errors = []
 
     for check in checks:
@@ -243,7 +246,7 @@ def run_targets(targets: Iterable[Callable], context: TargetContext) -> None:
         hypothesis.target(value, label=target.__name__)
 
 
-def add_cases(case: Case, response: GenericResponse, test: Callable, *args: Any) -> None:
+def add_cases(case: CaseProtocol, response: GenericResponse, test: Callable, *args: Any) -> None:
     context = HookContext(case.endpoint)
     for case_hook in get_all_by_name("add_case"):
         _case = case_hook(context, case.partial_deepcopy(), response)
@@ -253,7 +256,7 @@ def add_cases(case: Case, response: GenericResponse, test: Callable, *args: Any)
 
 
 def network_test(
-    case: Case,
+    case: CaseProtocol,
     checks: Iterable[CheckFunction],
     targets: Iterable[Target],
     result: TestResult,
@@ -275,7 +278,7 @@ def network_test(
 
 
 def _network_test(
-    case: Case,
+    case: CaseProtocol,
     checks: Iterable[CheckFunction],
     targets: Iterable[Target],
     result: TestResult,
@@ -313,7 +316,7 @@ def prepare_timeout(timeout: Optional[int]) -> Optional[float]:
 
 
 def wsgi_test(
-    case: Case,
+    case: CaseProtocol,
     checks: Iterable[CheckFunction],
     targets: Iterable[Target],
     result: TestResult,
@@ -330,7 +333,7 @@ def wsgi_test(
 
 
 def _wsgi_test(
-    case: Case,
+    case: CaseProtocol,
     checks: Iterable[CheckFunction],
     targets: Iterable[Target],
     result: TestResult,
@@ -373,7 +376,7 @@ def get_wsgi_auth(auth: Optional[RawAuth], auth_type: Optional[str]) -> Optional
 
 
 def asgi_test(
-    case: Case,
+    case: CaseProtocol,
     checks: Iterable[CheckFunction],
     targets: Iterable[Target],
     result: TestResult,
@@ -390,7 +393,7 @@ def asgi_test(
 
 
 def _asgi_test(
-    case: Case,
+    case: CaseProtocol,
     checks: Iterable[CheckFunction],
     targets: Iterable[Target],
     result: TestResult,
